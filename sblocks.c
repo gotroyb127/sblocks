@@ -4,11 +4,11 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <signal.h>
-#include <sys/stat.h>
 #include <X11/Xlib.h>
 #include <pthread.h>
+
+#include "arg.h"
 
 /* macros */
 #define BLKLEN     256
@@ -58,11 +58,9 @@ typedef struct {
 
 /* function declarations */
 static void BlkstrToOutStr(void);
-static void CloseFifo(void);
 static void CloseDisplay(void);
 static void OnQuit(int s);
 static void OpenDisplay(void);
-static void OpenFifo(void);
 static void (*PrintOutStr)(void);
 static void Run(void);
 static void SetRoot(void);
@@ -73,7 +71,6 @@ static void StdoutPrint(void);
 static void TsDiff(struct timespec *res, const struct timespec *a, const struct timespec *b);
 static int UpdateAll(int t);
 static void UpdateBlk(int i);
-static void UpdateFifo(void);
 #ifdef THR
 static void AsyncUpdateBlk(int i);
 static void InitThrds(void);
@@ -85,14 +82,12 @@ static void *ThrdUpdateBlk(void *arg);
 #include "config.h"
 
 /* variables */
+char *argv0;
 static char blkstr[BLKN][BLKLEN];
 static char OutStr[STSLEN];
-static int fifofd;
-static char *fifo = "/tmp/sblocks.fifo";
 static int T = -1;
 static int Restart = 0;
 static int Running = 1;
-static int UsingFifo = 0;
 static int LastSignal = 0;
 static struct timespec *next_ts = &(struct timespec) { 0, 0 };
 static struct timespec *curr_ts = &(struct timespec) { 0, 0 };
@@ -124,23 +119,11 @@ CloseDisplay(void)
 }
 
 void
-CloseFifo(void)
-{
-	if (UsingFifo) {
-		close(fifofd);
-		unlink(fifo);
-	}
-	UsingFifo = 0;
-}
-
-void
 OnQuit(int s)
 {
 	Running = 0;
 	if (s == SIGHUP) /* restart */
 		Restart = 1;
-	if (UsingFifo)
-		CloseFifo();
 }
 
 void
@@ -153,24 +136,6 @@ OpenDisplay(void)
 
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
-}
-
-void
-OpenFifo(void)
-{
-	struct stat st;
-
-	if (stat(fifo, &st) == 0)
-		unlink(fifo);
-	if (mkfifo(fifo, 0600) != 0) {
-		perror("mkfifo");
-		return;
-	}
-	if ((fifofd = open(fifo, O_WRONLY)) == -1) {
-		perror("open");
-		return;
-	}
-	UsingFifo = 1;
 }
 
 void
@@ -200,22 +165,12 @@ SetRoot(void)
 {
 	XStoreName(dpy, root, OutStr);
 	XFlush(dpy);
-	UpdateFifo();
 }
 
 void
 SigHan(int s)
 {
-	switch (s) {
-	case SIGUSR1:
-		OpenFifo();
-		break;
-	case SIGPIPE:
-		CloseFifo();
-		break;
-	default:
-		LastSignal = FROMSIG(s);
-	}
+	LastSignal = FROMSIG(s);
 }
 
 void
@@ -232,7 +187,6 @@ SigSetup(void)
 	setsighandler(SIGTERM, OnQuit);
 	setsighandler(SIGHUP, OnQuit);
 
-	setsighandler(SIGUSR1, SigHan);
 	setsighandler(SIGPIPE, SigHan);
 
 	for (i = 0; i < BLKN; ++i) {
@@ -365,32 +319,19 @@ UpdateBlk(int i)
 	pclose(cmdout);
 }
 
-void
-UpdateFifo(void)
-{
-	if (!UsingFifo)
-		return;
-	write(fifofd, OutStr, strlen(OutStr));
-	write(fifofd, "\n", 1);
-}
-
 int
 main(int argc, char *argv[])
 {
 	PrintOutStr = SetRoot;
-	if (argc > 1) {
-		if (argv[1][0] == '-') {
-			switch (argv[1][1]) {
-			case 'o':
-				PrintOutStr = StdoutPrint;
-				break;
-			}
-		} else {
-			fifo = argv[1];
-		}
-	}
-	if (argc > 2)
-		fifo = argv[2];
+
+	ARGBEGIN {
+	case 'o':
+		PrintOutStr = StdoutPrint;
+		break;
+	default:
+		fprintf(stderr, "usage: %s [-o]\n", argv0);
+		exit(1);
+	} ARGEND
 
 #ifdef THR
 	InitThrds();
@@ -402,5 +343,5 @@ main(int argc, char *argv[])
 		execvp(argv[0], argv);
 	OnQuit(SIGTERM);
 
-	return EXIT_SUCCESS;
+	return 0;
 }

@@ -18,7 +18,7 @@ LIBS = -L${X11LIB} -lX11 ${THREADING}
 
 # flags
 CPPFLAGS = -D_POSIX_C_SOURCE=200809L ${THREADING} ${DEBUG}
-CFLAGS   = -std=c99 -pedantic -Wall -Wno-deprecated-declarations -Os ${INCS} ${CPPFLAGS}
+CFLAGS   = -std=c99 -pedantic -Wall -Os ${INCS} ${CPPFLAGS}
 LDFLAGS  = ${LIBS}
 
 # compiler and linker

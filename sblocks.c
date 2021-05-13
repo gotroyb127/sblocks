@@ -15,7 +15,7 @@
 #define BLKN       LENGTH(blks)
 #define CLOCK      CLOCK_MONOTONIC
 #define LENGTH(X)  (sizeof X / sizeof X[0])
-#define MAX(X,Y)   (X > Y ? (X) : (Y))
+#define MAX(X,Y)   ((X) > (Y) ? (X) : (Y))
 #define SEC        1
 #define NSEC       0
 #define MIN_NSEC   1E6
@@ -34,7 +34,7 @@
 			eprintf("%s[%d]: sigaction: '%s' on signal %d\n",\
 			        argv0, __LINE__, strerror(errno), sig);\
 	} while (0)
-#define setsighandler(s, h)\
+#define setSigHandler(s, h)\
 	esigaction(s, &(struct sigaction){.sa_handler = h}, NULL)
 
 typedef struct {
@@ -48,31 +48,31 @@ typedef struct {
 #ifdef THR
 typedef struct {
 	pthread_t t;
-	int tojoin;
+	int toJoin;
 	int idx;
 } Thrd;
 #endif /* THR */
 
 /* function declarations */
-static void blkstostext(void);
-static void closedpy(void);
-static void onquit(int s);
-static void opendpy(void);
-static void (*printstext)(void);
-static void printstdout(void);
+static void blksToStext(void);
+static void closeDpy(void);
+static void onQuit(int s);
+static void openDpy(void);
+static void (*printStext)(void);
+static void printStdout(void);
 static void run(void);
-static void setroot(void);
-static void sighan(int s);
-static void sigsetup(void);
-static void xsleep();
-static void tsdiff(struct timespec *res, const struct timespec *a, const struct timespec *b);
-static int updateall(int t);
-static void updateblk(int i);
+static void setRoot(void);
+static void sigHan(int s);
+static void sigSetup(void);
+static void Sleep();
+static void tsDiff(struct timespec *res, const struct timespec *a, const struct timespec *b);
+static int updateAll(int t);
+static void updateBlk(int i);
 #ifdef THR
-static void asyncupdateblk(int i);
-static void initthrds(void);
-static void syncupdatedblks(void);
-static void *thrdupdateblk(void *arg);
+static void asyncUpdateBlk(int i);
+static void initThrds(void);
+static void syncUpdatedBlks(void);
+static void *thrdUpdateBlk(void *arg);
 #endif /* THR */
 
 /* include configuration file before variable declerations */
@@ -80,15 +80,15 @@ static void *thrdupdateblk(void *arg);
 
 /* variables */
 char *argv0;
-static char blkstr[BLKN][BLKLEN];
-static char stext[STSLEN];
+static char blkStr[BLKN][BLKLEN];
+static char sText[STSLEN];
 static int loops;
 static int restart = 0;
 static int running = 1;
-static int lastsignal = 0;
-static struct timespec nextts[1] = { { 0, 0 } };
-static struct timespec currts[1] = { { 0, 0 } };
-static struct timespec sleepts[1] = { { 0, 0 } };
+static int lastSignal = 0;
+static struct timespec nextTs[1] = { { 0, 0 } };
+static struct timespec currTs[1] = { { 0, 0 } };
+static struct timespec sleepTs[1] = { { 0, 0 } };
 /* X11 specific */
 static Display *dpy;
 static Window root;
@@ -98,24 +98,24 @@ static Thrd thrds[BLKN];
 
 /* function implementations */
 void
-blkstostext(void)
+blksToStext(void)
 {
 	int i, e;
 
 	for (i = e = 0; i < BLKN; i++) {
-		e += sprintf(stext + e, "%s%s%s",
-		     blks[i].strBefore, blkstr[i], blks[i].strAfter);
+		e += sprintf(sText + e, "%s%s%s",
+		     blks[i].strBefore, blkStr[i], blks[i].strAfter);
 	}
 }
 
 void
-closedpy(void)
+closeDpy(void)
 {
 	XCloseDisplay(dpy);
 }
 
 void
-onquit(int s)
+onQuit(int s)
 {
 	running = 0;
 	if (s == SIGHUP)
@@ -123,7 +123,7 @@ onquit(int s)
 }
 
 void
-opendpy(void)
+openDpy(void)
 {
 	if (!(dpy = XOpenDisplay(NULL))) {
 		eprintf("%s: cannot open display\n", argv0);
@@ -136,92 +136,93 @@ opendpy(void)
 void
 run(void)
 {
-	if (printstext == setroot)
-		opendpy();
+	if (printStext == setRoot)
+		openDpy();
 
 	while (running) {
-		clock_gettime(CLOCK, currts);
-		nextts->tv_sec = currts->tv_sec + SEC;
-		nextts->tv_nsec = currts->tv_nsec + NSEC;
-		if (updateall(loops++)) {
-			blkstostext();
-			printstext();
+		clock_gettime(CLOCK, currTs);
+		nextTs->tv_sec = currTs->tv_sec + SEC;
+		nextTs->tv_nsec = currTs->tv_nsec + NSEC;
+
+		if (updateAll(loops++)) {
+			blksToStext();
+			printStext();
 		}
-		xsleep();
+		Sleep();
 	}
 
-	if (printstext == setroot)
-		closedpy();
+	if (printStext == setRoot)
+		closeDpy();
 }
 
 void
-setroot(void)
+setRoot(void)
 {
-	XStoreName(dpy, root, stext);
+	XStoreName(dpy, root, sText);
 	XFlush(dpy);
 }
 
 void
-sighan(int s)
+sigHan(int s)
 {
-	lastsignal = s;
+	lastSignal = s;
 }
 
 void
-sigsetup(void)
+sigSetup(void)
 {
 	int i, s;
 
-	setsighandler(SIGINT, onquit);
-	setsighandler(SIGTERM, onquit);
-	setsighandler(SIGHUP, onquit);
+	setSigHandler(SIGINT, onQuit);
+	setSigHandler(SIGTERM, onQuit);
+	setSigHandler(SIGHUP, onQuit);
 
 	for (i = 0; i < BLKN; i++) {
 		if ((s = blks[i].sig))
-			setsighandler(s, sighan);
+			setSigHandler(s, sigHan);
 	}
 }
 
 void
-xsleep(void)
+Sleep(void)
 {
 	int i;
 
 	if (!running)
 		return;
-	if (lastsignal) {
+	if (lastSignal) {
 		for (i = 0; i < BLKN; i++) {
-			if (blks[i].sig == lastsignal)
+			if (blks[i].sig == lastSignal)
 #ifdef THR
-				asyncupdateblk(i);
+				asyncUpdateBlk(i);
 #else
-				updateblk(i);
+				updateBlk(i);
 #endif /* THR */
 		}
 #ifdef THR
-		syncupdatedblks();
+		syncUpdatedBlks();
 #endif /* THR */
-		blkstostext();
-		printstext();
-		lastsignal = 0;
+		blksToStext();
+		printStext();
+		lastSignal = 0;
 	}
 
-	clock_gettime(CLOCK, currts);
-	tsdiff(sleepts, nextts, currts);
-	debugts(sleepts);
-	if (nanosleep(sleepts, NULL))
-		xsleep();
+	clock_gettime(CLOCK, currTs);
+	tsDiff(sleepTs, nextTs, currTs);
+	debugts(sleepTs);
+	if (nanosleep(sleepTs, NULL))
+		Sleep();
 }
 
 void
-printstdout(void)
+printStdout(void)
 {
-	puts(stext);
+	puts(sText);
 	fflush(stdout);
 }
 
 void
-tsdiff(struct timespec *res, const struct timespec *a, const struct timespec *b)
+tsDiff(struct timespec *res, const struct timespec *a, const struct timespec *b)
 {
 	res->tv_sec = a->tv_sec - b->tv_sec - (a->tv_nsec < b->tv_nsec);
 	res->tv_nsec = a->tv_nsec - b->tv_nsec +
@@ -232,7 +233,7 @@ tsdiff(struct timespec *res, const struct timespec *a, const struct timespec *b)
 }
 
 int
-updateall(int t)
+updateAll(int t)
 {
 	int i, per, u;
 
@@ -240,15 +241,15 @@ updateall(int t)
 		per = blks[i].period;
 		if ((per != 0 && t % per == 0) || t == 0) {
 #ifdef THR
-			asyncupdateblk(i);
+			asyncUpdateBlk(i);
 #else
-			updateblk(i);
+			updateBlk(i);
 #endif /* THR */
 			u = 1;
 		}
 	}
 #ifdef THR
-	syncupdatedblks();
+	syncUpdatedBlks();
 #endif /* THR */
 
 	return u;
@@ -256,14 +257,14 @@ updateall(int t)
 
 #ifdef THR
 void
-asyncupdateblk(int i)
+asyncUpdateBlk(int i)
 {
-	pthread_create(&thrds[i].t, NULL, thrdupdateblk, &thrds[i].idx);
-	thrds[i].tojoin = 1;
+	pthread_create(&thrds[i].t, NULL, thrdUpdateBlk, &thrds[i].idx);
+	thrds[i].toJoin = 1;
 }
 
 void
-initthrds(void)
+initThrds(void)
 {
 	int i;
 	for (i = 0; i < BLKN; i++)
@@ -271,24 +272,24 @@ initthrds(void)
 }
 
 void
-syncupdatedblks(void)
+syncUpdatedBlks(void)
 {
 	int i;
 	for (i = 0; i < BLKN; i++) {
-		if (thrds[i].tojoin) {
+		if (thrds[i].toJoin) {
 			pthread_join(thrds[i].t, NULL);
-			thrds[i].tojoin = 0;
+			thrds[i].toJoin = 0;
 		}
 	}
 }
 
 void *
-thrdupdateblk(void *arg)
+thrdUpdateBlk(void *arg)
 {
 	int i = *(int*)arg;
 
 	debugf("in: blk[%d]\n", i);
-	updateblk(i);
+	updateBlk(i);
 	debugf("out: blk[%d]\n", i);
 
 	return NULL;
@@ -296,13 +297,13 @@ thrdupdateblk(void *arg)
 #endif /* THR */
 
 void
-updateblk(int i)
+updateBlk(int i)
 {
 	FILE *cmdout;
 
 	cmdout = popen(blks[i].cmd, "r");
-	if (!fgets(blkstr[i], BLKLEN, cmdout) && !lastsignal)
-		blkstr[i][0] = '\0';
+	if (!fgets(blkStr[i], BLKLEN, cmdout) && !lastSignal)
+		blkStr[i][0] = '\0';
 	pclose(cmdout);
 }
 
@@ -311,11 +312,11 @@ main(int argc, char *argv[])
 {
 	char **argvsave = argv;
 
-	printstext = setroot;
+	printStext = setRoot;
 
 	ARGBEGIN {
 	case 'o':
-		printstext = printstdout;
+		printStext = printStdout;
 		break;
 	default:
 		eprintf("usage: %s [-o]\n", argv0);
@@ -323,9 +324,9 @@ main(int argc, char *argv[])
 	} ARGEND
 
 #ifdef THR
-	initthrds();
+	initThrds();
 #endif /* THR */
-	sigsetup();
+	sigSetup();
 	run();
 
 	if (restart)

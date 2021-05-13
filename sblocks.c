@@ -17,7 +17,6 @@
 #define CLOCK      CLOCK_MONOTONIC
 #define LENGTH(X)  (sizeof X / sizeof X[0])
 #define MAX(X,Y)   ((X) > (Y) ? (X) : (Y))
-#define MIN_NSEC   1E6
 #define STSLEN     256 /* dwm uses 256 */
 
 #ifdef DEBUG
@@ -83,7 +82,7 @@ static void *thrdUpdateBlk(void *arg);
 char *argv0;
 static char blkStr[BLKN][BLKLEN];
 static char sText[STSLEN];
-static int loops;
+static int cycles;
 static int restart = 0;
 static int running = 1;
 static int lastSignal = 0;
@@ -140,12 +139,12 @@ run(void)
 	if (printStext == setRoot)
 		openDpy();
 
+	clock_gettime(CLOCK, nextTs);
 	while (running) {
-		clock_gettime(CLOCK, currTs);
-		nextTs->tv_sec = currTs->tv_sec + SEC;
-		nextTs->tv_nsec = currTs->tv_nsec + NSEC;
+		nextTs->tv_sec += SEC;
+		nextTs->tv_nsec += NSEC;
 
-		if (updateAll(loops++)) {
+		if (updateAll(cycles++)) {
 			blksToStext();
 			printStext();
 		}
@@ -210,6 +209,12 @@ Sleep(void)
 
 	clock_gettime(CLOCK, currTs);
 	tsDiff(sleepTs, nextTs, currTs);
+	/* happens when signaled continiously */
+	while (sleepTs->tv_sec < 0) {
+		nextTs->tv_sec += 1;
+		sleepTs->tv_sec += 1;
+	}
+	debugTs(currTs);
 	debugTs(sleepTs);
 	if (nanosleep(sleepTs, NULL))
 		Sleep();
@@ -228,9 +233,6 @@ tsDiff(struct timespec *res, const struct timespec *a, const struct timespec *b)
 	res->tv_sec = a->tv_sec - b->tv_sec - (a->tv_nsec < b->tv_nsec);
 	res->tv_nsec = a->tv_nsec - b->tv_nsec +
 	               (a->tv_nsec < b->tv_nsec) * 1E9;
-	/* needed after continiously signaling */
-	res->tv_nsec = MAX(res->tv_nsec, MIN_NSEC);
-	res->tv_sec = MAX(res->tv_sec, 0);
 }
 
 int

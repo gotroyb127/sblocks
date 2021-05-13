@@ -5,8 +5,9 @@
 #include <time.h>
 #include <errno.h>
 #include <signal.h>
-#include <X11/Xlib.h>
 #include <pthread.h>
+#include <sys/select.h>
+#include <X11/Xlib.h>
 
 #include "arg.h"
 
@@ -16,8 +17,6 @@
 #define CLOCK      CLOCK_MONOTONIC
 #define LENGTH(X)  (sizeof X / sizeof X[0])
 #define MAX(X,Y)   ((X) > (Y) ? (X) : (Y))
-#define SEC        1
-#define NSEC       0
 #define MIN_NSEC   1E6
 #define STSLEN     256 /* dwm uses 256 */
 
@@ -26,7 +25,7 @@
 #else
 #define debugf(...)
 #endif /* DEBUG */
-#define debugts(t)  debugf("%s: %ld.%09ld\n", #t, t->tv_sec, t->tv_nsec);
+#define debugTs(t)  debugf("%s: %ld.%09ld\n", #t, t->tv_sec, t->tv_nsec);
 #define eprintf(...) fprintf(stderr, __VA_ARGS__)
 #define esigaction(sig, act, oldact)\
 	do {\
@@ -43,6 +42,7 @@ typedef struct {
 	char *strAfter;
 	unsigned int period;
 	unsigned int sig;
+	struct timespec ts;
 } Blk;
 
 #ifdef THR
@@ -50,6 +50,7 @@ typedef struct {
 	pthread_t t;
 	int toJoin;
 	int idx;
+	int pfd[2]; /* pipe's fd */
 } Thrd;
 #endif /* THR */
 
@@ -71,7 +72,7 @@ static void updateBlk(int i);
 #ifdef THR
 static void asyncUpdateBlk(int i);
 static void initThrds(void);
-static void syncUpdatedBlks(void);
+static int syncUpdatedBlks(void);
 static void *thrdUpdateBlk(void *arg);
 #endif /* THR */
 
@@ -209,7 +210,7 @@ Sleep(void)
 
 	clock_gettime(CLOCK, currTs);
 	tsDiff(sleepTs, nextTs, currTs);
-	debugts(sleepTs);
+	debugTs(sleepTs);
 	if (nanosleep(sleepTs, NULL))
 		Sleep();
 }
@@ -249,9 +250,8 @@ updateAll(int t)
 		}
 	}
 #ifdef THR
-	syncUpdatedBlks();
+	return syncUpdatedBlks();
 #endif /* THR */
-
 	return u;
 }
 
@@ -259,8 +259,15 @@ updateAll(int t)
 void
 asyncUpdateBlk(int i)
 {
-	pthread_create(&thrds[i].t, NULL, thrdUpdateBlk, &thrds[i].idx);
-	thrds[i].toJoin = 1;
+	Thrd *th;
+
+	/* a previous command is still running */
+	if ((th = &thrds[i])->toJoin)
+		return;
+
+	pipe(th->pfd);
+	pthread_create(&th->t, NULL, thrdUpdateBlk, &th->idx);
+	th->toJoin = 1;
 }
 
 void
@@ -271,16 +278,35 @@ initThrds(void)
 		thrds[i].idx = i;
 }
 
-void
+int
 syncUpdatedBlks(void)
 {
-	int i;
+	int i, n, u;
+	Thrd *th;
+	fd_set rfds;
+
 	for (i = 0; i < BLKN; i++) {
-		if (thrds[i].toJoin) {
-			pthread_join(thrds[i].t, NULL);
-			thrds[i].toJoin = 0;
-		}
+		if (!(th = &thrds[i])->toJoin)
+			continue;
+
+		FD_ZERO(&rfds);
+		FD_SET(th->pfd[0], &rfds);
+
+		n = pselect(th->pfd[0] + 1, &rfds, NULL, NULL,
+		            &blks[i].ts, NULL);
+		if (n == 0) {
+			debugf("blk[%d] hasn't completed.\n", i);
+			continue;
+		} else if (n > 0)
+			close(th->pfd[0]);
+		else
+			debugf("pselect: %s\n", strerror(errno));
+
+		pthread_join(th->t, NULL);
+		th->toJoin = 0;
+		u = 1;
 	}
+	return u;
 }
 
 void *
@@ -292,6 +318,9 @@ thrdUpdateBlk(void *arg)
 	updateBlk(i);
 	debugf("out: blk[%d]\n", i);
 
+	write(thrds[i].pfd[1], "\n", 1);
+	close(thrds[i].pfd[1]);
+
 	return NULL;
 }
 #endif /* THR */
@@ -302,7 +331,7 @@ updateBlk(int i)
 	FILE *cmdout;
 
 	cmdout = popen(blks[i].cmd, "r");
-	if (!fgets(blkStr[i], BLKLEN, cmdout) && !lastSignal)
+	if (!fgets(blkStr[i], BLKLEN, cmdout))
 		blkStr[i][0] = '\0';
 	pclose(cmdout);
 }

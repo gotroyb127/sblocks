@@ -17,7 +17,7 @@ ${PROG}: ${OBJ}
 	${CC} -o $@ ${OBJ} ${LDFLAGS}
 
 clean:
-	rm -f *.o ${PROG}
+	rm -f ${OBJ} ${PROG}
 
 install: all
 	mkdir -p ${DESTDIR}${PREFIX}/bin

@@ -10,7 +10,9 @@ THREADING = -DTHR -lpthread
 #THREADING =
 
 DEBUG = -DDEBUG
+DEBFLAGS = -g -O0
 DEBUG =
+DEBFLAGS =
 
 # includes and libs
 INCS = -I${X11INC}
@@ -18,7 +20,7 @@ LIBS = -L${X11LIB} -lX11 ${THREADING}
 
 # flags
 CPPFLAGS = -D_POSIX_C_SOURCE=200809L ${THREADING} ${DEBUG}
-CFLAGS   = -std=c99 -pedantic -Wall -Os ${INCS} ${CPPFLAGS}
+CFLAGS   = -std=c99 -pedantic -Wall -Os ${INCS} ${CPPFLAGS} ${DEBFLAGS}
 LDFLAGS  = ${LIBS}
 
 # compiler and linker

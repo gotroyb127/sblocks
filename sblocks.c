@@ -100,11 +100,12 @@ static Thrd thrds[BLKN];
 void
 blksToStext(void)
 {
-	int i, e;
+	int i;
+	size_t o;
 
-	for (i = e = 0; i < BLKN; i++) {
-		e += sprintf(sText + e, "%s%s%s",
-		     blks[i].strBefore, blkStr[i], blks[i].strAfter);
+	for (i = o = 0; i < BLKN && o < sizeof sText; i++) {
+		o += snprintf(sText + o, sizeof sText - o, "%s%s%s",
+		              blks[i].strBefore, blkStr[i], blks[i].strAfter);
 	}
 }
 

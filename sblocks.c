@@ -64,7 +64,7 @@ static void run(void);
 static void setRoot(void);
 static void sigHan(int s);
 static void sigSetup(void);
-static void Sleep();
+static void _sleep();
 static void tsDiff(struct timespec *res, const struct timespec *a, const struct timespec *b);
 static int updateAll(int t);
 static void updateBlk(int i);
@@ -149,7 +149,7 @@ run(void)
 			blksToStext();
 			printStext();
 		}
-		Sleep();
+		_sleep();
 	}
 
 	if (printStext == setRoot)
@@ -185,7 +185,7 @@ sigSetup(void)
 }
 
 void
-Sleep(void)
+_sleep(void)
 {
 	int i;
 
@@ -218,7 +218,7 @@ Sleep(void)
 	debugTs(currTs);
 	debugTs(sleepTs);
 	if (nanosleep(sleepTs, NULL))
-		Sleep();
+		_sleep();
 }
 
 void
@@ -340,9 +340,9 @@ updateBlk(int i)
 }
 
 int
-main(int argc, char *argv[])
+main(int argc, char *_argv[])
 {
-	char **argvsave = argv;
+	char **argv = _argv;
 
 	printStext = setRoot;
 
@@ -362,7 +362,7 @@ main(int argc, char *argv[])
 	run();
 
 	if (restart)
-		execvp(argv0, argvsave);
+		execvp(argv0, _argv);
 
 	return 0;
 }

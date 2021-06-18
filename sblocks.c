@@ -24,6 +24,7 @@
 #else
 #define debugf(...)
 #endif /* DEBUG */
+
 #define debugTs(t)  debugf("%s: %ld.%09ld\n", #t, t->tv_sec, t->tv_nsec);
 #define eprintf(...) fprintf(stderr, __VA_ARGS__)
 #define esigaction(sig, act, oldact)\
@@ -36,9 +37,8 @@
 	esigaction(s, &(struct sigaction){.sa_handler = h}, NULL)
 
 typedef struct {
-	char *strBefore;
+	char *fmt;
 	char *cmd;
-	char *strAfter;
 	unsigned int period;
 	unsigned int sig;
 	struct timespec ts;
@@ -68,6 +68,7 @@ static void _sleep();
 static void tsDiff(struct timespec *res, const struct timespec *a, const struct timespec *b);
 static int updateAll(int t);
 static void updateBlk(int i);
+
 #ifdef THR
 static void asyncUpdateBlk(int i);
 static void initThrds(void);
@@ -92,6 +93,7 @@ static struct timespec sleepTs[1] = { { 0, 0 } };
 /* X11 specific */
 static Display *dpy;
 static Window root;
+
 #ifdef THR
 static Thrd thrds[BLKN];
 #endif /* THR */
@@ -101,12 +103,12 @@ void
 blksToStext(void)
 {
 	int i;
-	size_t o;
+	char *s, *e;
 
-	for (i = o = 0; i < BLKN && o < sizeof sText; i++) {
-		o += snprintf(sText + o, sizeof sText - o, "%s%s%s",
-		              blks[i].strBefore, blkStr[i], blks[i].strAfter);
-	}
+	s = sText;
+	e = sText + sizeof sText;
+	for (i = 0; i < BLKN && s < e; i++)
+		s += snprintf(s, e - s, blks[i].fmt, blkStr[i]);
 }
 
 void

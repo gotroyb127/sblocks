@@ -1,5 +1,5 @@
 /*
- * The following command strings are passed to sh to be evaluated every
+ * The following command strings are passed to sh to be executed every
  * `period` seconds (unless `period` is 0). Send signal X to `sblocks`
  * to run again the command and update the blocks with signal X.
  * Also notice that other signals might kill it.
@@ -16,11 +16,11 @@
 #define TOSIG(X) (31 - (X))
 
 static const Blk blks[] = {
-	/* before  command            after  period  signal    secs, nanosecs */
-	{ "\1",    "STATUS_player",   "",    1,      TOSIG(1), { 0, 45E7 } },
-	{ "\1 ",   "STATUS_kblayout", "",    2,      TOSIG(2), { 0, 4E7 } },
-	{ "\1 ",   "STATUS_network",  "",    10,     TOSIG(3), { 0, 1E8 } },
-	{ "\1 ",   "STATUS_volume",   "",    10,     TOSIG(4), { 0, 2E8 } },
-	{ "\1 ",   "STATUS_battery",  "",    10,     TOSIG(5), { 0, 5E7 } },
-	{ "\1 ",   "STATUS_date",     "",    1,      0,        { 0, 4E7 } },
+	/* fmt      command             period  signal    secs, nanosecs */
+	{ "\1%s",   "STATUS_player",    1,      TOSIG(1), { 0, 45E7 } },
+	{ "\1%s ",  "STATUS_kblayout",  2,      TOSIG(2), { 0, 4E7 } },
+	{ "\1%s ",  "STATUS_network",   10,     TOSIG(3), { 0, 1E8 } },
+	{ "\1%s ",  "STATUS_volume",    10,     TOSIG(4), { 0, 2E8 } },
+	{ "\1%s ",  "STATUS_battery",   10,     TOSIG(5), { 0, 5E7 } },
+	{ "\1%s ",  "STATUS_date",      1,      0,        { 0, 4E7 } },
 };

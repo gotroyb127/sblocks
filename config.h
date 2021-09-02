@@ -18,7 +18,7 @@
 static const Blk blks[] = {
 	/* fmt      command             period  signal    secs, nanosecs */
 	{ "\1%s",   "STATUS_player",    1,      TOSIG(1), { 0, 45E7 } },
-	{ "\1%s ",  "STATUS_kblayout",  2,      TOSIG(2), { 0, 4E7 } },
+	{ "\1 %s ", "STATUS_kblayout",  2,      TOSIG(2), { 0, 4E7 } },
 	{ "\1%s ",  "STATUS_network",   10,     TOSIG(3), { 0, 1E8 } },
 	{ "\1%s ",  "STATUS_volume",    10,     TOSIG(4), { 0, 2E8 } },
 	{ "\1%s ",  "STATUS_battery",   10,     TOSIG(5), { 0, 5E7 } },
